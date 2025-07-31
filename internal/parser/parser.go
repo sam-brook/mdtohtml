@@ -20,19 +20,25 @@ type Stack interface {
 	Pop() string
 	Peek() string
 	GetElement() HTMLElement
-	Clear()
 }
 
 type Parser struct {
-	Lines       []string
-	LineIndex   int
-	CharIndex   int
-	Syntaxstack SyntaxStack
-	Output      strings.Builder
+	Lines          []string
+	LineIndex      int
+	CharIndex      int
+	MultiLineTags  SyntaxStack
+	BlockLevelTags SyntaxStack
+	InTextTags     SyntaxStack
+	Output         strings.Builder
 }
 
 func (s *SyntaxStack) Push(val string) {
-	s.syntax[s.topIndex] = val
+	s.topIndex++
+	if len(s.syntax) > s.topIndex+1 {
+		s.syntax = append(s.syntax, val)
+	} else {
+		s.syntax[s.topIndex] = val
+	}
 }
 
 func (s *SyntaxStack) Pop() string {
@@ -47,25 +53,34 @@ func (s *SyntaxStack) Peek() string {
 }
 
 func (s *SyntaxStack) GetElement() HTMLElement {
-	return htmlTags[s.syntax[s.topIndex]]
+	return blockhtmlTags[s.syntax[s.topIndex]]
 }
 
-func (s SyntaxStack) Clear() {
-	s.topIndex = 0
+func (s *SyntaxStack) Clear() {
+	s.topIndex = -1
 }
 
-var htmlTags = map[string]HTMLElement{
+var blockhtmlTags = map[string]HTMLElement{
 	"# ":      {"<h1>", "</h1>"},
 	"## ":     {"<h2>", "</h2>"},
 	"### ":    {"<h3>", "</h3>"},
 	"#### ":   {"<h4>", "</h4>"},
 	"##### ":  {"<h5>", "</h5>"},
 	"###### ": {"<h6>", "</h6>"},
-	"*":       {"<em>", "</em>"},
-	"**":      {"<strong>", "</strong>"},
-	"`":       {"<code>", "</code>"},
-	"~~":      {"<del>", "</del>"},
+	"> ":      {"<blockquote>", "</blockquote>"},
 	"- ":      {"<ul><li>", "</li></ul>"},
+}
+
+var multiLineTags = map[string]HTMLElement{
+	"```": {"<code>", "</code>"},
+}
+
+// TODO add links
+var inTextTags = map[string]HTMLElement{
+	"*":  {"<em>", "</em>"},
+	"**": {"<strong>", "</strong>"},
+	"`":  {"<code>", "</code>"},
+	"~~": {"<del>", "</del>"},
 }
 
 func NewParser(input *string) *Parser {
@@ -73,9 +88,17 @@ func NewParser(input *string) *Parser {
 		Lines:     strings.Split(*input, "\n"),
 		LineIndex: 0,
 		CharIndex: 0,
-		Syntaxstack: SyntaxStack{
+		BlockLevelTags: SyntaxStack{
+			syntax:   make([]string, 1),
+			topIndex: -1,
+		},
+		MultiLineTags: SyntaxStack{
+			syntax:   make([]string, 1),
+			topIndex: -1,
+		},
+		InTextTags: SyntaxStack{
 			syntax:   make([]string, 10),
-			topIndex: 0,
+			topIndex: -1,
 		},
 	}
 }
@@ -85,12 +108,16 @@ func GetPrefixToken(input string) string {
 	return input[0 : first_space_index+1]
 }
 
-func WrapWithTag(p *Parser, line string) {
-	element := htmlTags[p.Syntaxstack.Pop()]
+func WrapLineWithTag(p *Parser, line string) {
+	element := blockhtmlTags[p.BlockLevelTags.Pop()]
 	p.Output.WriteString(element.Open)
 	p.Output.WriteString(line)
 	p.Output.WriteString(element.Close)
 	p.Output.WriteString("\n")
+}
+
+func stripBlockTag(current_line string) string {
+	return current_line[strings.IndexAny(current_line, " ")+1:]
 }
 
 func Parse(input string) string {
@@ -100,15 +127,13 @@ func Parse(input string) string {
 
 	for ; p.LineIndex < len(p.Lines); p.LineIndex++ {
 		current_line := p.Lines[p.LineIndex]
-		fmt.Println("test current_line value:", current_line)
 		first_word := GetPrefixToken(current_line)
-		fmt.Println("test first_word value:", first_word)
-		_, ok := htmlTags[first_word]
+		_, ok := blockhtmlTags[first_word]
 		if ok {
-			p.Syntaxstack.Push(first_word)
-			fmt.Println("test stack peek", p.Syntaxstack.Peek())
+			p.BlockLevelTags.Push(first_word)
+			fmt.Println("test stack peek", p.BlockLevelTags.Peek())
 		}
-		WrapWithTag(p, current_line[strings.IndexAny(current_line, " ")+1:])
+		WrapLineWithTag(p, stripBlockTag(current_line))
 
 	}
 
