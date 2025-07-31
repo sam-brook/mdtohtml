@@ -7,7 +7,7 @@ import (
 
 func Test(t *testing.T) {
 	testing_data := "# Title potato\n## hello potato"
-	result := ParseMarkdown(testing_data)
+	result := Parse(testing_data)
 	expected := "<h1>Title potato</h1>\n<h2>hello potato</h2>\n"
 
 	if result != expected {
