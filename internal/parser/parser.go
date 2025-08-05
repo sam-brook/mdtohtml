@@ -125,7 +125,7 @@ func GetPrefixToken(input string) string {
 }
 
 func concatenate_bytes(a, b byte) string {
-	return string(a) + string(b)
+	return string([]byte{a, b})
 }
 
 func isTagChar(char byte) bool {
