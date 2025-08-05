@@ -11,8 +11,9 @@ type HTMLElement struct {
 }
 
 type SyntaxStack struct {
-	syntax   []string
-	topIndex int
+	syntax     []string
+	topIndex   int
+	stack_type map[string]HTMLElement
 }
 
 type Stack interface {
@@ -43,7 +44,6 @@ func (s *SyntaxStack) Push(val string) {
 
 func (s *SyntaxStack) Pop() string {
 	if s.topIndex == -1 {
-		fmt.Println("attempted to pop from empty stack")
 		return ""
 	}
 	popped_elem := s.syntax[s.topIndex]
@@ -53,7 +53,6 @@ func (s *SyntaxStack) Pop() string {
 
 func (s *SyntaxStack) Peek() string {
 	if s.topIndex == -1 {
-		fmt.Println("attempted to peek from empty stack")
 		return ""
 	}
 	popped_elem := s.syntax[s.topIndex]
@@ -61,7 +60,13 @@ func (s *SyntaxStack) Peek() string {
 }
 
 func (s *SyntaxStack) GetElement() HTMLElement {
-	return blockhtmlTags[s.syntax[s.topIndex]]
+	key := s.Peek()
+	html_tag, ok := s.stack_type[key]
+	if !ok {
+		return HTMLElement{}
+	}
+
+	return html_tag
 }
 
 func (s *SyntaxStack) Clear() {
@@ -97,16 +102,19 @@ func NewParser(input *string) *Parser {
 		LineIndex: 0,
 		CharIndex: 0,
 		BlockLevelTags: SyntaxStack{
-			syntax:   make([]string, 0),
-			topIndex: -1,
+			syntax:     make([]string, 0),
+			topIndex:   -1,
+			stack_type: blockhtmlTags,
 		},
 		MultiLineTags: SyntaxStack{
-			syntax:   make([]string, 0),
-			topIndex: -1,
+			syntax:     make([]string, 0),
+			topIndex:   -1,
+			stack_type: multiLineTags,
 		},
 		InTextTags: SyntaxStack{
-			syntax:   make([]string, 0),
-			topIndex: -1,
+			syntax:     make([]string, 0),
+			topIndex:   -1,
+			stack_type: inTextTags,
 		},
 	}
 }
@@ -114,6 +122,10 @@ func NewParser(input *string) *Parser {
 func GetPrefixToken(input string) string {
 	first_space_index := strings.IndexAny(input, " ")
 	return input[0 : first_space_index+1]
+}
+
+func concatenate_bytes(a, b byte) string {
+	return string(a) + string(b)
 }
 
 func isTagChar(char byte) bool {
@@ -147,14 +159,9 @@ func Parse(input string) string {
 		current_line := p.Lines[p.LineIndex]
 
 		first_word := GetPrefixToken(current_line)
-		fmt.Println("first word is : " + first_word)
 		_, block_tag_ok := blockhtmlTags[first_word]
 		if block_tag_ok {
 			WriteTagPrefix(&p.BlockLevelTags, first_word, &p.Output)
-
-			fmt.Println("block level tag is: " + p.BlockLevelTags.Peek())
-			fmt.Println("top index is : ", p.BlockLevelTags.topIndex)
-			fmt.Println("syntax stack is : ", p.BlockLevelTags.syntax)
 			p.CharIndex = p.CharIndex + len(first_word)
 		}
 
@@ -162,9 +169,10 @@ func Parse(input string) string {
 		for ; p.CharIndex < len(current_line); p.CharIndex++ {
 			c := current_line[p.CharIndex]
 			if isTagChar(c) {
-
 				if ((p.CharIndex + 1) < len(current_line)) && (c == current_line[p.CharIndex+1]) {
-					tag := string(c + current_line[p.CharIndex+1])
+					tag := concatenate_bytes(c, current_line[p.CharIndex+1])
+					fmt.Println("current char is: " + string(c))
+					fmt.Println("next char is: " + string(current_line[p.CharIndex+1]))
 					fmt.Println("current tag is: " + tag)
 
 					if p.InTextTags.Peek() == tag {
@@ -172,19 +180,17 @@ func Parse(input string) string {
 					} else {
 						WriteTagPrefix(&p.InTextTags, tag, &p.Output)
 					}
-					p.CharIndex = p.CharIndex + 2
-					continue
+					p.CharIndex = p.CharIndex + 1
 				} else {
+					fmt.Println("current tag is: " + string(c))
 					if p.InTextTags.Peek() == string(c) {
 						WriteTagSuffix(&p.InTextTags, &p.Output)
 					} else {
 						WriteTagPrefix(&p.InTextTags, string(c), &p.Output)
 					}
-					p.CharIndex = p.CharIndex + 1
 				}
 			} else {
 				p.Output.WriteByte(c)
-				continue
 			}
 		}
 		if block_tag_ok {
