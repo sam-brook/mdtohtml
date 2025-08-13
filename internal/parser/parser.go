@@ -121,6 +121,9 @@ func NewParser(input *string) *Parser {
 
 func GetPrefixToken(input string) string {
 	first_space_index := strings.IndexAny(input, " ")
+	if first_space_index == -1 {
+		return input
+	}
 	return input[0 : first_space_index+1]
 }
 
@@ -149,6 +152,10 @@ func WriteTagSuffix(stack *SyntaxStack, output *strings.Builder) {
 	output.WriteString(html_tag.Close)
 }
 
+func WriteLine(input string, output *strings.Builder) {
+	output.WriteString(input)
+}
+
 func Parse(input string) string {
 	p := NewParser(&input)
 
@@ -157,8 +164,26 @@ func Parse(input string) string {
 	// Line level loop
 	for ; p.LineIndex < len(p.Lines); p.LineIndex++ {
 		current_line := p.Lines[p.LineIndex]
-
 		first_word := GetPrefixToken(current_line)
+		fmt.Println("current first word is: ", first_word)
+
+		_, multiline_tag_ok := multiLineTags[first_word]
+		inside_multiline := p.MultiLineTags.Peek() != ""
+		if multiline_tag_ok {
+			if !inside_multiline {
+				WriteTagPrefix(&p.MultiLineTags, first_word, &p.Output)
+				continue
+			} else {
+				WriteTagSuffix(&p.MultiLineTags, &p.Output)
+				continue
+			}
+		}
+
+		if inside_multiline {
+			WriteLine(current_line, &p.Output)
+			continue
+		}
+
 		_, block_tag_ok := blockhtmlTags[first_word]
 		if block_tag_ok {
 			WriteTagPrefix(&p.BlockLevelTags, first_word, &p.Output)
