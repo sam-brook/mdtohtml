@@ -193,6 +193,9 @@ func Parse(input string) string {
 				p.Output.WriteByte(c)
 			}
 		}
+		for p.InTextTags.Peek() != "" {
+			WriteTagSuffix(&p.InTextTags, &p.Output)
+		}
 		if block_tag_ok {
 			WriteTagSuffix(&p.BlockLevelTags, &p.Output)
 		}
